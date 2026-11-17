@@ -8,8 +8,10 @@ Betriebs steht. Dadurch kaum Fehltreffer.
 """
 from __future__ import annotations
 
+import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 from bs4 import BeautifulSoup
 
@@ -109,12 +111,18 @@ def finde_website(lead: Lead, timeout: int = 8) -> str:
     edom = lead.email.partition("@")[2].lower()
     if edom and not any(f in edom for f in FREEMAIL):
         doms.insert(0, edom.removeprefix("www."))   # Firmen-E-Mail -> Domain der Website?
-    for dom in doms:
-        try:
-            r = wc.hole(s, f"https://www.{dom}", timeout)
-        except wc.Abruffehler:
-            continue
-        if r.status >= 400 or wc.ist_social(r.url):
+    for i, dom in enumerate(doms):
+        r = None
+        # erst HTTPS, dann (für die wahrscheinlichsten Kandidaten) altes HTTP ohne Zertifikat
+        for schema in (("https", "http") if i < 4 else ("https",)):
+            try:
+                r = wc.hole(s, f"{schema}://www.{dom}", timeout)
+            except wc.Abruffehler:
+                r = None
+                continue
+            if r.status < 400:
+                break
+        if r is None or r.status >= 400 or wc.ist_social(r.url):
             continue
         if passt(r.text, lead) or dom == edom.removeprefix("www."):
             return r.url
@@ -129,22 +137,40 @@ def finde_website(lead: Lead, timeout: int = 8) -> str:
     return ""
 
 
-def ergaenze_websites(leads: list[Lead], threads: int = 24, log=print) -> int:
+def _cache_key(l: Lead) -> str:
+    return f"{l.name}|{l.ort}|{l.telefon}|{l.email}"
+
+
+def ergaenze_websites(leads: list[Lead], threads: int = 24, log=print,
+                      cache_pfad: Path | None = None) -> int:
     ohne = [l for l in leads if not l.website]
-    log(f"Domain-Suche für {len(ohne)} Betriebe ohne eingetragene Website …")
+    cache: dict[str, str] = {}
+    if cache_pfad and cache_pfad.exists():
+        try:
+            cache = json.loads(cache_pfad.read_text(encoding="utf-8"))
+        except ValueError:
+            cache = {}
+    offen = [l for l in ohne if _cache_key(l) not in cache]
+    log(f"Domain-Suche für {len(ohne)} Betriebe ohne eingetragene Website "
+        f"({len(ohne) - len(offen)} aus Cache) …")
+    if offen:
+        with ThreadPoolExecutor(max_workers=threads) as ex:
+            futures = {ex.submit(finde_website, l): l for l in offen}
+            for n, f in enumerate(as_completed(futures), 1):
+                try:
+                    cache[_cache_key(futures[f])] = f.result()
+                except Exception:  # noqa: BLE001
+                    cache[_cache_key(futures[f])] = ""
+                if n % 100 == 0 or n == len(offen):
+                    log(f"  {n}/{len(offen)} durchsucht")
+        if cache_pfad:
+            cache_pfad.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
     gefunden = 0
-    with ThreadPoolExecutor(max_workers=threads) as ex:
-        futures = {ex.submit(finde_website, l): l for l in ohne}
-        for n, f in enumerate(as_completed(futures), 1):
-            l = futures[f]
-            try:
-                url = f.result()
-            except Exception:  # noqa: BLE001
-                url = ""
-            if url:
-                l.website = url
-                l.quelle += " (Website per Domain-Suche gefunden)"
-                gefunden += 1
-            if n % 100 == 0 or n == len(ohne):
-                log(f"  {n}/{len(ohne)} durchsucht, {gefunden} Websites gefunden")
+    for l in ohne:
+        url = cache.get(_cache_key(l), "")
+        if url:
+            l.website = url
+            l.quelle += " (Website per Domain-Suche gefunden)"
+            gefunden += 1
+    log(f"  {gefunden} zusätzliche Websites gefunden")
     return gefunden

@@ -119,7 +119,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if not a.ohne_websitecheck and not a.ohne_domainsuche:
         from .website_suche import ergaenze_websites
-        ergaenze_websites(leads, threads=a.threads)
+        ergaenze_websites(leads, threads=a.threads,
+                          cache_pfad=ordner / "domainsuche_cache.json")
 
     if a.ohne_websitecheck:
         for l in leads:

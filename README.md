@@ -74,6 +74,27 @@ python -m leadfinder --nur-mit-telefon
 python -m leadfinder --liste
 ```
 
+Wenn die Overpass-API überlastet oder gesperrt ist (z. B. in Cloud-Umgebungen), den
+OSM-Auszug herunterladen und lokal auswerten (`pip install osmium shapely`):
+
+```bash
+curl -o daten/koln.osm.pbf https://download.openstreetmap.fr/extracts/europe/germany/nordrhein_westfalen/koln-latest.osm.pbf
+python -m leadfinder --osm-datei daten/koln.osm.pbf
+```
+
+Der Auszug „Regierungsbezirk Köln“ deckt Rhein-Sieg-Kreis, Bonn, Köln, Rhein-Erft und
+Rhein-Berg ab.
+
+### Was automatisch bereinigt/ergänzt wird
+
+- **Filialketten raus**: Betriebe mit Marken-Tag in OSM oder ≥ 3 gleichnamigen Standorten
+  (Kamps, BackWerk, …) haben Konzern-Websites und sind keine Kunden.
+- **Duplikate** aus OSM + Google werden zusammengeführt.
+- **Domain-Suche**: Für Betriebe ohne eingetragene Website werden naheliegende Domains
+  probiert (z. B. `malerbetrieb-schmitz.de`). Ein Treffer zählt nur, wenn Telefonnummer oder
+  Straße + PLZ/Ort des Betriebs auf der Seite stehen. Abschalten mit `--ohne-domainsuche`.
+- **E-Mail/Telefon** werden aus Startseite, Impressum und Kontaktseite gelesen.
+
 Die Website-Prüfung wird in `ergebnisse/website_cache.json` gespeichert. Ein zweiter Lauf ist
 dadurch schnell. Den Cache löschen, wenn die Seiten neu geprüft werden sollen.
 

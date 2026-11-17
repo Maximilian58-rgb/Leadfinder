@@ -82,10 +82,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ausgabe", default="ergebnisse", help="Ausgabeordner")
     p.add_argument("--ohne-websitecheck", action="store_true",
                    help="Websites nicht laden (schnell, aber keine Qualitätsbewertung)")
+    p.add_argument("--ohne-domainsuche", action="store_true",
+                   help="Für Betriebe ohne Website NICHT nach passenden Domains suchen")
     p.add_argument("--threads", type=int, default=16)
     p.add_argument("--nur-mit-telefon", action="store_true",
                    help="Betriebe ohne Telefonnummer weglassen")
-    p.add_argument("--liste", action="store_true", help="Kategorien/Regionen anzeigen")
+    p.add_argument("--osm-datei", help="Lokale .osm.pbf-Datei statt Overpass-API nutzen "
+                                       "(pip install osmium shapely)")
+    p.add_argument("--liste",action="store_true", help="Kategorien/Regionen anzeigen")
     a = p.parse_args(argv)
 
     if a.liste:
@@ -98,14 +102,24 @@ def main(argv: list[str] | None = None) -> int:
     ordner.mkdir(parents=True, exist_ok=True)
 
     leads: list[Lead] = []
-    if a.quelle in ("osm", "beide"):
+    if a.osm_datei:
+        from .sources import osm_pbf
+        leads += osm_pbf.lade(a.osm_datei, regs, kats)
+    elif a.quelle in ("osm", "beide"):
         from .sources import osm
         leads += osm.lade(regs, kats)
     if a.quelle in ("google", "beide"):
         from .sources import google_places
         leads += google_places.lade(regs, kats)
+    vorher = len(leads)
+    leads = scoring.entferne_ketten(leads)
+    print(f"{vorher - len(leads)} Filialketten-Standorte entfernt")
     leads = scoring.dedupliziere(leads)
     print(f"{len(leads)} Betriebe nach Duplikat-Bereinigung")
+
+    if not a.ohne_websitecheck and not a.ohne_domainsuche:
+        from .website_suche import ergaenze_websites
+        ergaenze_websites(leads, threads=a.threads)
 
     if a.ohne_websitecheck:
         for l in leads:

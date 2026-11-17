@@ -166,3 +166,27 @@ def test_pipeline_und_export(tmp_path: Path, monkeypatch):
     assert "Ohne Website" in top3 and "Nur Facebook" in top3
     assert ranking.cell(ranking.max_row, 3).value == "Gute Seite"
     assert csv_pfad.read_text(encoding="utf-8-sig").count("\n") == 5
+
+
+def test_domain_kandidaten():
+    from leadfinder.website_suche import kandidaten
+    k = kandidaten("Malerbetrieb Schmitz GmbH", "Siegburg")
+    assert "malerbetrieb-schmitz.de" in k and "schmitz-siegburg.de" in k
+    assert "malerbetrieb.de" not in k
+    assert kandidaten("GmbH", "Bonn") == []
+
+
+def test_domain_verifikation():
+    from leadfinder.website_suche import passt
+    l = _lead(name="Gartenbau Beispiel", telefon="+49 2241 123456", strasse="Hauptstraße 5",
+              plz="53721", ort="Siegburg")
+    assert passt("<p>Tel. 02241 / 12 34 56</p>", l)
+    assert passt("<p>Hauptstr. 5, 53721 Siegburg</p>", _lead(strasse="Hauptstraße 5",
+                                                            plz="53721", ort="Siegburg"))
+    assert not passt("<p>Gartenbau in Köln, Tel. 0221 999999</p>", l)
+
+
+def test_ketten_entfernen():
+    leads = [_lead(name="Kamps", ort=o) for o in ("Köln", "Bonn", "Siegburg")]
+    leads += [_lead(name="Marke", kette=True), _lead(name="Gartenbau Einzeln")]
+    assert [l.name for l in scoring.entferne_ketten(leads)] == ["Gartenbau Einzeln"]

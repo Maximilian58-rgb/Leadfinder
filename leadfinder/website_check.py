@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import datetime as _dt
+import os
 import re
+import shutil
+import subprocess
 import time
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlparse
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, UnicodeDammit
 
 STATUS_KEINE = "Keine Website"
 STATUS_SOCIAL = "Nur Social Media / Verzeichnis"
@@ -213,6 +216,66 @@ def _kontaktseiten(soup: BeautifulSoup, basis: str) -> list[str]:
     return urls[:3]
 
 
+@dataclass
+class Antwort:
+    status: int
+    url: str
+    text: str
+    ladezeit: float
+
+
+class Abruffehler(Exception):
+    pass
+
+
+def _http_tunnel_noetig() -> str | None:
+    """Manche Umgebungen haben nur einen HTTPS-Proxy (CONNECT). Plain-HTTP muss dann
+    per CONNECT-Tunnel laufen – das kann requests nicht, curl schon."""
+    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    if proxy and not (os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")):
+        return proxy
+    return None
+
+
+def _hole_curl(url: str, timeout: int, proxy: str) -> Antwort:
+    marker = "\n__LEADFINDER__"
+    cmd = ["curl", "-sS", "-L", "--max-redirs", "8", "-m", str(timeout), "--compressed",
+           "-p", "-x", proxy, "-A", UA, "-H", "Accept-Language: de-DE,de;q=0.9",
+           "-w", marker + "%{http_code} %{time_total} %{url_effective}", url]
+    try:
+        r = subprocess.run(cmd, capture_output=True, timeout=timeout + 5)
+    except subprocess.TimeoutExpired as e:
+        raise Abruffehler("Timeout") from e
+    roh, _, meta = r.stdout.rpartition(marker.encode())
+    if not meta:
+        raise Abruffehler(r.stderr.decode(errors="replace").strip()[:80] or "curl-Fehler")
+    code, zeit, final = meta.decode().split(" ", 2)
+    if code == "000":
+        raise Abruffehler(r.stderr.decode(errors="replace").strip()[:80] or "keine Antwort")
+    text = UnicodeDammit(roh, ["utf-8", "windows-1252"]).unicode_markup or ""
+    return Antwort(int(code), final, text, float(zeit))
+
+
+def hole(s: requests.Session, url: str, timeout: int = 12) -> Antwort:
+    proxy = _http_tunnel_noetig()
+    if url.startswith("http://") and proxy and shutil.which("curl"):
+        return _hole_curl(url, timeout, proxy)
+    start = time.monotonic()
+    try:
+        r = s.get(url, timeout=timeout, allow_redirects=True)
+    except requests.RequestException as e:
+        raise Abruffehler(type(e).__name__) from e
+    if r.encoding is None or r.encoding.lower() == "iso-8859-1":
+        r.encoding = r.apparent_encoding
+    return Antwort(r.status_code, r.url, r.text, time.monotonic() - start)
+
+
+def neue_session() -> requests.Session:
+    s = requests.Session()
+    s.headers.update({"User-Agent": UA, "Accept-Language": "de-DE,de;q=0.9"})
+    return s
+
+
 def pruefe(url: str, timeout: int = 12) -> Analyse:
     """Lädt die Website (inkl. Impressum/Kontakt) und bewertet sie."""
     if not url:
@@ -221,37 +284,33 @@ def pruefe(url: str, timeout: int = 12) -> Analyse:
         return Analyse(STATUS_SOCIAL, [f"Nur Profil auf {_domain(normalisiere_url(url))}"],
                        0, normalisiere_url(url))
     url = normalisiere_url(url)
-    s = requests.Session()
-    s.headers.update({"User-Agent": UA, "Accept-Language": "de-DE,de;q=0.9"})
-    start = time.monotonic()
+    s = neue_session()
     try:
-        r = s.get(url, timeout=timeout, allow_redirects=True)
-    except requests.exceptions.SSLError:
+        r = hole(s, url, timeout)
+    except Abruffehler as e:
+        # https mit kaputtem Zertifikat -> http probieren (und umgekehrt)
+        alt = (url.replace("https://", "http://", 1) if url.startswith("https://")
+               else url.replace("http://", "https://", 1))
         try:
-            r = s.get(url.replace("https://", "http://"), timeout=timeout)
-        except requests.RequestException as e:
-            return Analyse(STATUS_KAPUTT, [f"Nicht erreichbar ({type(e).__name__})"], 10, url)
-    except requests.RequestException as e:
-        return Analyse(STATUS_KAPUTT, [f"Nicht erreichbar ({type(e).__name__})"], 10, url)
-    ladezeit = time.monotonic() - start
-    if r.status_code >= 400:
-        return Analyse(STATUS_KAPUTT, [f"Fehlerseite HTTP {r.status_code}"], 10, r.url)
+            r = hole(s, alt, timeout)
+        except Abruffehler:
+            return Analyse(STATUS_KAPUTT, [f"Nicht erreichbar ({e})"], 10, url)
+    if r.status == 0 or r.status >= 400:
+        return Analyse(STATUS_KAPUTT, [f"Fehlerseite HTTP {r.status}"], 10, r.url)
     if ist_social(r.url):
         return Analyse(STATUS_SOCIAL, [f"Leitet weiter auf {_domain(r.url)}"], 0, r.url)
-    r.encoding = r.encoding or r.apparent_encoding
-    analyse = bewerte_html(r.text, r.url, ladezeit)
+    analyse = bewerte_html(r.text, r.url, r.ladezeit)
 
     # Impressum/Kontakt nach E-Mail & Telefon durchsuchen
     if analyse.status != STATUS_KAPUTT:
         soup = BeautifulSoup(r.text, "html.parser")
         for unterseite in _kontaktseiten(soup, r.url):
             try:
-                ru = s.get(unterseite, timeout=timeout)
-            except requests.RequestException:
+                ru = hole(s, unterseite, timeout)
+            except Abruffehler:
                 continue
-            if ru.status_code >= 400:
+            if ru.status >= 400:
                 continue
-            ru.encoding = ru.encoding or ru.apparent_encoding
             sub = BeautifulSoup(ru.text, "html.parser")
             for e in finde_emails(ru.text, sub):
                 if e not in analyse.emails:

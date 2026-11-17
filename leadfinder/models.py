@@ -21,6 +21,7 @@ class Lead:
     maps_link: str = ""
     lat: float | None = None
     lon: float | None = None
+    kette: bool = False                 # Filialkette (Marke) -> kein Lead
     # Ergebnisse der Website-Prüfung
     website_status: str = ""            # siehe website_check.STATUS_*
     website_maengel: list[str] = field(default_factory=list)

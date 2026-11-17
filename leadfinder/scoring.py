@@ -72,3 +72,11 @@ def dedupliziere(leads: list[Lead]) -> list[Lead]:
         for k in schluessel:
             index.setdefault(k, ziel)
     return ergebnis
+
+
+def entferne_ketten(leads: list[Lead], min_filialen: int = 3) -> list[Lead]:
+    """Filialketten (Marke in OSM oder >= min_filialen gleichnamige Standorte) entfernen –
+    die haben zentrale Konzern-Websites und sind keine Kunden für Webdesign."""
+    from collections import Counter
+    anzahl = Counter(_norm(l.name) for l in leads)
+    return [l for l in leads if not l.kette and anzahl[_norm(l.name)] < min_filialen]

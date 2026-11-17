@@ -90,6 +90,7 @@ def element_zu_lead(el: dict, kategorien_keys: set[str]) -> Lead | None:
         maps_link=f"https://www.openstreetmap.org/{el['type']}/{el['id']}",
         lat=lat,
         lon=lon,
+        kette=bool(tags.get("brand:wikidata") or tags.get("brand")),
     )
 
 

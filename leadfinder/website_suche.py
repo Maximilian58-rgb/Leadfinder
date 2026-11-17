@@ -73,6 +73,11 @@ def kandidaten(name: str, ort: str, max_anzahl: int = 8) -> list[str]:
     return [f"{n}.de" for n in namen[:max_anzahl]]
 
 
+FREEMAIL = ("gmail.", "googlemail.", "gmx.", "web.de", "t-online.", "yahoo.", "hotmail.",
+            "outlook.", "live.", "arcor.", "netcologne.", "icloud.", "freenet.", "aol.",
+            "online.de", "me.com", "mail.de", "posteo.", "vodafone", "unitybox", "kabelmail")
+
+
 def _ziffern(tel: str) -> str:
     d = re.sub(r"\D", "", tel or "")
     if d.startswith("49"):
@@ -97,17 +102,21 @@ def passt(text: str, lead: Lead) -> bool:
 
 
 def finde_website(lead: Lead, timeout: int = 8) -> str:
-    if not (lead.telefon or lead.strasse):
+    if not (lead.telefon or lead.strasse or lead.email):
         return ""  # nicht verifizierbar
     s = wc.neue_session()
-    for dom in kandidaten(lead.name, lead.ort):
+    doms = kandidaten(lead.name, lead.ort)
+    edom = lead.email.partition("@")[2].lower()
+    if edom and not any(f in edom for f in FREEMAIL):
+        doms.insert(0, edom.removeprefix("www."))   # Firmen-E-Mail -> Domain der Website?
+    for dom in doms:
         try:
             r = wc.hole(s, f"https://www.{dom}", timeout)
         except wc.Abruffehler:
             continue
         if r.status >= 400 or wc.ist_social(r.url):
             continue
-        if passt(r.text, lead):
+        if passt(r.text, lead) or dom == edom.removeprefix("www."):
             return r.url
         soup = BeautifulSoup(r.text, "html.parser")
         for unterseite in wc._kontaktseiten(soup, r.url)[:2]:

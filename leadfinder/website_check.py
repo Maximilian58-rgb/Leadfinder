@@ -295,10 +295,22 @@ def pruefe(url: str, timeout: int = 12) -> Analyse:
             r = hole(s, alt, timeout)
         except Abruffehler:
             return Analyse(STATUS_KAPUTT, [f"Nicht erreichbar ({e})"], 10, url)
-    if r.status == 0 or r.status >= 400:
-        return Analyse(STATUS_KAPUTT, [f"Fehlerseite HTTP {r.status}"], 10, r.url)
     if ist_social(r.url):
         return Analyse(STATUS_SOCIAL, [f"Leitet weiter auf {_domain(r.url)}"], 0, r.url)
+    if r.status == 404 and urlparse(r.url).path not in ("", "/"):
+        root = f"{urlparse(r.url).scheme}://{urlparse(r.url).netloc}/"
+        try:
+            r2 = hole(s, root, timeout)
+            if r2.status < 400:
+                r = r2
+        except Abruffehler:
+            pass
+    if r.status in (401, 403, 429):
+        # Bot-Schutz / Firewall – Seite existiert vermutlich, ist aber nicht automatisch prüfbar
+        return Analyse(STATUS_MITTEL, [f"Nicht automatisch prüfbar (HTTP {r.status}, Bot-Schutz)"
+                                       " – bitte manuell ansehen"], 3, r.url)
+    if r.status == 0 or r.status >= 400:
+        return Analyse(STATUS_KAPUTT, [f"Fehlerseite HTTP {r.status}"], 10, r.url)
     analyse = bewerte_html(r.text, r.url, r.ladezeit)
 
     # Impressum/Kontakt nach E-Mail & Telefon durchsuchen

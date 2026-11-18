@@ -159,12 +159,12 @@ def test_pipeline_und_export(tmp_path: Path, monkeypatch):
 
     xlsx, csv_pfad = exportiere(leads, tmp_path)
     wb = load_workbook(xlsx)
-    assert wb.sheetnames[0] == "Kategorien-Ranking"
-    assert "Keine Website" in wb.sheetnames and "Schlechte Website" in wb.sheetnames
-    ranking = wb["Alle Leads (Ranking)"]
-    top3 = [ranking.cell(r, 3).value for r in (2, 3, 4)]
+    assert wb.sheetnames == ["Unternehmen"]
+    ws = wb["Unternehmen"]
+    assert [ws.cell(1, c).value for c in (1, 5, 6)] == ["Unternehmen", "Telefon", "E-Mail"]
+    top3 = [ws.cell(r, 1).value for r in (2, 3, 4)]
     assert "Ohne Website" in top3 and "Nur Facebook" in top3
-    assert ranking.cell(ranking.max_row, 3).value == "Gute Seite"
+    assert ws.cell(ws.max_row, 1).value == "Gute Seite"
     assert csv_pfad.read_text(encoding="utf-8-sig").count("\n") == 5
 
 

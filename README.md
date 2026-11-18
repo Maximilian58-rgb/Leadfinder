@@ -6,25 +6,21 @@ prüft deren Website und rankt sie als Verkaufs-Leads für Webdesign, mit **Tele
 
 ## Was rauskommt
 
-`ergebnisse/leads.xlsx` mit diesen Blättern:
+`ergebnisse/leads.xlsx` mit **einem Blatt „Unternehmen“**, einer langen Liste aller Betriebe:
 
-| Blatt | Inhalt |
-|---|---|
-| **Kategorien-Ranking** | Alle Branchen nach *Einfachheit des Website-Baus* (1–10) mit Anzahl Betriebe je Website-Status |
-| **Alle Leads (Ranking)** | Jeder Betrieb, sortiert nach Lead-Score (0–100) |
-| **Mit Telefon + E-Mail** | Sofort kontaktierbare Leads (ohne die mit guter Website) |
-| **Keine Website** | Kein Webauftritt gefunden → beste Chance |
-| **Nur Social Media / Verzeichnis** | Nur Facebook/Instagram/Gelbe Seiten usw. |
-| **Website kaputt / Platzhalter** | Nicht erreichbar, Fehlerseite, „Im Aufbau“, Parkseite |
-| **Schlechte Website** | Veraltet, nicht mobil, kein HTTPS, Copyright 2015 usw. |
-| **Verbesserungswürdige Website** | Ein paar Mängel |
-| **Gute Website** | Kaum Chance, nur der Vollständigkeit halber |
-| **9 – Gartenpflege …** usw. | Ein Blatt pro Branche, sortiert nach Einfachheit |
+| Unternehmen | Straße | PLZ | Ort | Telefon | E-Mail | Website | Website-Status | Branche | Mängel der Website | Lead-Score |
+|---|---|---|---|---|---|---|---|---|---|---|
 
-Jede Zeile enthält Telefon (klickbar), E-Mail (klickbar), Website, die **konkreten Mängel**
-(z. B. „Kein HTTPS“, „Nicht mobil-optimiert“, „Copyright-Jahr 2014“, „Kein Impressum-Link“),
-die du direkt als Verkaufsargument im Gespräch nutzen kannst, plus Adresse und Kartenlink.
-Zusätzlich gibt es `leads.csv` (Semikolon, für Excel/CRM).
+- Links steht der Name (fett, bleibt beim Scrollen stehen), rechts daneben die Kontaktdaten.
+- Sortiert nach Verkaufschance, beste zuerst, nicht nach Branche. Über den Filter in der
+  Kopfzeile kannst du nach Name A–Z sortieren oder z. B. nur „Keine Website“ anzeigen.
+- Telefon, E-Mail und Website sind anklickbar.
+- Website-Status: Keine Website, Nur Social Media / Verzeichnis, Website kaputt / Platzhalter,
+  Schlechte Website, Verbesserungswürdige Website, Gute Website.
+- Die Spalte „Mängel“ nennt konkrete Schwächen („Kein HTTPS“, „Nicht mobil-optimiert“,
+  „Copyright-Jahr 2014“, „Kein Impressum-Link“) als Gesprächseinstieg.
+
+Zusätzlich gibt es `leads.csv` (Semikolon, für Excel/CRM) mit denselben Spalten.
 
 ### Einfachheits-Ranking der Branchen
 
